@@ -351,7 +351,7 @@ function sideCards() {
     });
     items.sort(function (a, b) { return CH_ORDER.indexOf(a.ch) - CH_ORDER.indexOf(b.ch); }); /* stable: keeps the page's order within a chapter */
   } else if (st.view === "tahak") {
-    items = TAHAK.map(function (t, i) { return { a: "data-tk", k: i, name: t.d.replace(/<[^>]+>/g, ""), cnt: t.ex.length, g: "Priorita " + t.p, cur: false }; });
+    items = TAHAK.map(function (t, i) { return { a: "data-tk", k: i, name: t.n || t.d.replace(/<[^>]+>/g, ""), cnt: t.ex.length, g: "Priorita " + t.p, cur: false }; });
   } else {
     items = BLOKY.map(function (b) { return { a: "data-blk", k: b.k, name: b.name, cnt: Object.keys(blkUse()[b.k].pis).length, g: "", cur: false }; });
   }
@@ -513,11 +513,11 @@ function renderVzory() {
 }
 function renderTahak() {
   var h = '<div class="sheet"><header class="head"><div class="bignum">T</div><div class="meta"><span>Vzorce seřazené podle důležitosti</span></div><div class="tools"></div><h2>Co dopsat na tahák</h2></header>';
-  h += '<div class="card"><p class="section-label">Konstanty (T = 300 K)</p><dl class="consts">' +
-    [["V<sub>T</sub>", "26 mV"], ["V<sub>BG</sub>", "1,25 V"], ["TC(V<sub>BE</sub>)", "−2 mV/K"], ["k", "1,38·10⁻²³ J/K"], ["q", "1,602·10⁻¹⁹ C"], ["4kT", "1,656·10⁻²⁰ J"]]
-      .map(function (c) { return "<div><dt>" + c[0] + "</dt><dd>" + c[1] + "</dd></div>"; }).join("") + "</dl></div>";
+  var K = window.TAHAK_K; /* the subject's constants card (its own data), none when the subject has none */
+  if (K && K.c && K.c.length) h += '<div class="card"><p class="section-label">' + (K.t || "Konstanty") + '</p><dl class="consts">' +
+    K.c.map(function (c) { return "<div><dt>" + c[0] + "</dt><dd>" + c[1] + "</dd></div>"; }).join("") + "</dl></div>";
   h += '<div class="card"><p class="section-label">Vzorce</p><div class="tbl"><table><tr><th>Priorita</th><th>Vzorec</th><th>K čemu</th><th>Kde se použije</th></tr>';
-  TAHAK.forEach(function (t, i) { h += '<tr data-hl="t' + i + '"><td><b>' + t.p + "</b></td><td>" + t.f.map(function (x) { return '<div style="padding:3px 0">$' + x + "$</div>"; }).join("") + "</td><td>" + t.d + "</td><td>" + exLinks(t.ex) + "</td></tr>"; });
+  TAHAK.forEach(function (t, i) { h += '<tr data-hl="t' + i + '"><td><b>' + t.p + "</b></td><td>" + t.f.map(function (x) { return '<div style="padding:3px 0">$' + x + "$</div>"; }).join("") + "</td><td>" + (t.n ? "<b>" + esc(t.n) + "</b><br>" : "") + t.d + "</td><td>" + exLinks(t.ex) + "</td></tr>"; });
   return h + "</table></div></div></div>";
 }
 

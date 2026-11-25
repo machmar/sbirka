@@ -63,4 +63,6 @@ window.VZORCE = [
   ["integrální šum v pásmu", R`V_N=v_n\sqrt{f_2-f_1+f_K\ln\frac{f_2}{f_1}}`]
 ]}
 ];
+/* karta Konstanty na stránce „Co na tahák“ (dřív natvrdo v core/app.js): [popisek HTML, hodnota] */
+window.TAHAK_K = { t: "Konstanty (T = 300 K)", c: [["V<sub>T</sub>", "26 mV"], ["V<sub>BG</sub>", "1,25 V"], ["TC(V<sub>BE</sub>)", "−2 mV/K"], ["k", "1,38·10⁻²³ J/K"], ["q", "1,602·10⁻¹⁹ C"], ["4kT", "1,656·10⁻²⁰ J"]] };
 })();

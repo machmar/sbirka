@@ -29,6 +29,7 @@ Názvy datových souborů jsou libovolné, `subject.js` je vyjmenuje. Každý so
 | `LINK` | vazba kroků Procvičit → kroky Pochopit | ne (jen s `NAI_EX`) |
 | `VZORCE` | panel „Vzorce a konstanty“ | ne |
 | `PATTERNS`, `TAHAK` | stránky **Vzory** a **Co na tahák** | ne (bez nich se záložky skryjí) |
+| `TAHAK_K` | karta s konstantami nahoře na stránce **Co na tahák** | ne (bez ní se karta nezobrazí) |
 | `BLOKY` | stránka **Bloky** (vlastní kreslená schémata, složitější, viz `data/nai/bloky.js`) | ne |
 
 Texty: kde je v šabloně `R\`...\``, píše se HTML a TeX (`$...$` v řádku, `\[...\]` samostatně). V obyčejných řetězcích (`task`, `q`, `hint`, `why`, `given`) se `V_out` nebo `R_{ref}` vysází jako dolní index, TeX tam nepiš.
@@ -133,8 +134,11 @@ window.VZORCE = [{ g: "Skupina", f: [["popis", R`TeX`], ["…", R`…`]] }];
 
 ```js
 window.PATTERNS = { klic: { name: "Název vzoru", d: R`popis (HTML/TeX)`, f: [R`vzorec`] } };
-window.TAHAK = [{ p: "★★★", f: [R`vzorec`], d: "proč je důležitý", ex: ["1.1", "2.3"] }];  // ex = čísla příkladů
+window.TAHAK = [{ p: "★★★", n: "Krátký název", f: [R`vzorec`], d: "proč je důležitý", ex: ["1.1", "2.3"] }];  // ex = čísla příkladů
+window.TAHAK_K = { t: "Konstanty", c: [["k", "1,38·10⁻²³ J/K"], ["V<sub>T</sub>", "26 mV"]] };  // [popisek HTML, hodnota]
 ```
+
+`TAHAK`: řádky jdou v pořadí, v jakém jsou zapsané, a v levém seznamu se seskupí podle priority `p`, proto je řaď od nejdůležitějších. `n` (nepovinné) je krátký název řádku do levého seznamu a jako nadpis sloupce „K čemu“; bez něj se v seznamu ukáže celé `d`. V `d` lze psát HTML a TeX (`$...$`).
 
 ## Obrázky
 
