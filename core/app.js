@@ -132,19 +132,40 @@ function unitFactors(u, exact) {
   num.forEach(function (a) { den.forEach(function (b) { out.push(a / b); }); });
   return out;
 }
+/* powers of ten: "×10^-19", "·10⁻¹⁹", "*10(-19)" in what you type mean e-19 */
+var SUP = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-", "⁺": "+" };
+var POW10 = /[·×x*]10(?:\^\(?([-+]?\d+)\)?|([⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))/i;
+/* "1/s" and "s⁻¹" are the same unit; written as a separate word so "0,021/m" stays 0,021 /m */
+function perUnit(s) { return s.replace(/(^|\s)1\/([A-Za-zµμΩ]+)\s*$/, "$1$2⁻¹"); }
+function powExp(m) { return m[1] || m[2].replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]/g, function (c) { return SUP[c]; }); }
 function ansValues(raw, unit) {
-  var t = String(raw).replace(/\s+/g, "").replace(/[\u2212\u2013]/g, "-").replace(",", ".");
-  var m = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(.*)$/i.exec(t);
-  if (!m || (m[2] && !/^[a-zµμΩω√%°\/]+$/i.test(m[2]))) return null;
-  var v = parseFloat(m[1]);
-  if (!m[2]) return [v];
-  var fu = unitFactors(unit || "", true)[0];
-  return unitFactors(m[2], false).map(function (f) { return v * f / fu; });
+  /* a field in "×10⁻¹⁹ J": the answer is the number in front of the power (3,14), the whole value is right too */
+  var u = perUnit(String(unit || "").trim()).replace(/\s+/g, "").replace(/[−–]/g, "-"), pm = new RegExp("^" + POW10.source, "i").exec(u), pw = 1;
+  if (pm) { pw = Math.pow(10, +powExp(pm)); u = u.slice(pm[0].length); }
+  var t = perUnit(String(raw).trim()).replace(/\s+/g, "").replace(/[−–]/g, "-").replace(",", ".").replace(new RegExp(POW10.source, "gi"), function () { return "e" + powExp(arguments); });
+  var vs, num = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
+  /* the field's own unit written after the number, also one the prefix rules can't read ("1/m", "kg·m/s", "m⁻³");
+     checked first so "0,02 1/m" is 0,02 and not 0,021 /m */
+  if (u && t.length > u.length && t.slice(-u.length) === u && num.test(t.slice(0, -u.length))) vs = [parseFloat(t.slice(0, -u.length))];
+  else {
+    var m = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(.*)$/i.exec(t);
+    if (!m || (m[2] && !/^[a-zµμΩω√%°\/⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺·]+$/i.test(m[2]))) return null;
+    var v = parseFloat(m[1]);
+    if (!m[2]) return pm ? [v, v / pw] : [v]; /* bare number: in the field's unit, or the whole value */
+    var fu = unitFactors(u, true)[0];
+    vs = unitFactors(m[2], false).map(function (f) { return v * f / fu; });
+  }
+  return pm ? vs.map(function (x) { return x / pw; }) : vs;
 }
 (function () { /* self-check of the cases above */
   function has(r, x) { return !!r && r.some(function (v) { return Math.abs(v - x) < 1e-9 * Math.max(1, Math.abs(x)); }); }
-  console.assert(has(ansValues("125", "kΩ"), 125) && has(ansValues("125k", "kΩ"), 125) && has(ansValues("125 kohm", "kΩ"), 125) && has(ansValues("0,125M", "kΩ"), 125), "ansValues kΩ");
+  console.assert(has(ansValues("125", "kΩ"), 125) && has(ansValues("125k", "kΩ"), 125) && has(ansValues("125 kohm", "kΩ"), 125) && has(ansValues("0,125M", "kΩ"), 125) && has(ansValues("125 kΩ", "kΩ"), 125), "ansValues kΩ");
   console.assert(has(ansValues("2m", "MΩ"), 2) && has(ansValues("2m", "mV"), 2) && has(ansValues("3u", "µA/V"), 3) && has(ansValues("5V/us", "V/µs"), 5) && ansValues("abc", "V") === null, "ansValues prefixes");
+  var J = "×10⁻¹⁹ J";
+  console.assert(has(ansValues("3,14", J), 3.14) && has(ansValues("3,14e-19", J), 3.14) && has(ansValues("3,14e-19 J", J), 3.14) && has(ansValues("3,14·10^-19 J", J), 3.14) && has(ansValues("3,14 ×10⁻¹⁹ J", J), 3.14) && has(ansValues("3,14*10^(-19)", J), 3.14), "ansValues ×10ⁿ");
+  console.assert(has(ansValues("5,19", "×10⁻² s⁻¹"), 5.19) && has(ansValues("0,0519 s⁻¹", "×10⁻² s⁻¹"), 5.19) && has(ansValues("1,02e-27 kg·m/s", "×10⁻²⁷ kg·m/s"), 1.02) && has(ansValues("6,02e5", "×10⁵"), 6.02), "ansValues ×10ⁿ units");
+  console.assert(has(ansValues("0,02 1/m", "1/m"), 0.02) && !has(ansValues("0,02 1/m", "1/m"), 0.021) && has(ansValues("333 1/s", "1/s"), 333) && has(ansValues("5 m", "m"), 5) && has(ansValues("32,1°", "°"), 32.1), "ansValues own unit");
+  console.assert(has(ansValues("5,19e-2 1/s", "×10⁻² s⁻¹"), 5.19) && has(ansValues("333 s⁻¹", "1/s"), 333) && has(ansValues("0,02 m⁻¹", "1/m"), 0.02) && has(ansValues("1,82e13 m⁻³", "×10¹³ m⁻³"), 1.82) && !!ansValues("1,82e13 m⁻³", ""), "ansValues 1/x = x⁻¹");
 })();
 function solved(p, i) { var s = pg(p); return !!(s.ok[i] || s.rev[i]); }
 function frontier(p) { for (var i = 0; i < p.m.steps.length; i++) if (!solved(p, i)) return i; return p.m.steps.length; }
