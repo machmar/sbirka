@@ -45,7 +45,7 @@
     '  <aside>' +
     '    <div class="side-top">' +
     '      <div class="brand">' +
-    '        <div><b id="brand"></b><span id="brandsub"></span></div>' +
+    '        <a class="brandlink" href="' + root + '" title="Všechny předměty"><b id="brand"></b><span id="brandsub"></span></a>' +
     '        <div class="brand-btns">' +
     '          <button class="iconbtn" id="rtbtn" type="button" popovertarget="rtpop" title="Spolu: sdílet pohled, ukazatel a poznámky s dalšími počítači" aria-label="Spolu">⇄<b id="rtn"></b></button>' +
     '          <button class="iconbtn" id="theme" type="button" title="Přepnout světlý a tmavý vzhled" aria-label="Přepnout světlý a tmavý vzhled">◐</button>' +

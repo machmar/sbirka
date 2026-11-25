@@ -349,7 +349,9 @@ function renderSide() {
       last = p.ch;
     }
     var k = pinsHtml(p) + (st.known[p.id] ? '<span class="known">✓ umím</span>' : "") + "<span>" + esc(p.m.kind) + "</span>";
-    h += '<li' + (folding && p.ch !== st.openCh ? ' class="fold"' : "") + '><button type="button" data-pi="' + i + '" aria-current="' + (st.view === "ex" && i === st.pi) + '"><span class="n">' + p.id + '</span><span class="t">' + fmt(p.m.title) + '</span><span class="k">' + k + "</span></button></li>";
+    var cls = [folding && p.ch !== st.openCh ? "fold" : "", RT ? "pk" : "", RT && RT.peek && i === st.pi ? "peeking" : ""].join(" ").trim();
+    var eye = RT ? '<button type="button" class="iconbtn peek" data-peek="' + i + '" title="Podívat se sám: ostatní zůstanou, kde jsou" aria-label="Podívat se sám na ' + p.id + '">' + EYE + "</button>" : "";
+    h += '<li' + (cls ? ' class="' + cls + '"' : "") + '><button type="button" data-pi="' + i + '" aria-current="' + (st.view === "ex" && i === st.pi) + '"><span class="n">' + p.id + '</span><span class="t">' + fmt(p.m.title) + '</span><span class="k">' + k + "</span></button>" + eye + "</li>";
   });
   if (!shown) h = '<li class="nores">Nic nenalezeno.</li>';
   $("#list").innerHTML = h;
@@ -675,6 +677,7 @@ document.addEventListener("contextmenu", function (e) {
   var t = RT && e.target.closest && e.target.closest("#list [data-pi]");
   if (!t) return;
   e.preventDefault();
+  if (RT.peek) { RT.peek = false; RT.pend = null; rtBar(); }
   rtSend("goto", { id: PROBS[+t.dataset.pi].id });
   go(+t.dataset.pi);
 });
@@ -1087,6 +1090,8 @@ document.addEventListener("click", function (ev) {
     st.theme = dark ? "light" : "dark"; applyTheme(); save(); return;
   }
   if (d.tab) { if (d.tab === "ex") go(st.pi); else goPage(d.tab); return; }
+  if (d.peek) { peekStart(+d.peek); return; }
+  if (d.rtback) { if (RT && RT.peek) peekEnd(); else pendGo(); return; }
   if (d.pi) { go(+d.pi); return; }
   if (d.chap) {
     st.openCh = d.chap; renderSide();
@@ -1349,12 +1354,13 @@ document.addEventListener("click", function (e) { if (e.target.closest && e.targ
 
 /* ---------- schematic over the whole window (the browser window itself stays as it is): the paper goes into the
    browser's top layer as a manual popover, which lifts it out of main's container and its stacking. Drawing, notes and
-   zoom keep working since they all go by the paper's own box. Shared with the room. ---------- */
+   zoom keep working since they all go by the paper's own box. Each person's own: pointers, drawing and notes are in
+   the picture's own coordinates, so the others still see them in place. ---------- */
 var FS = false, FS_OK = !!HTMLElement.prototype.showPopover; /* shortcut: no button in browsers without popover (pre-2024) */
 function fsBtn() {
   if (!FS_OK) return "";
   var d = FS ? "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" : "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5";
-  return '<button type="button" class="zfs" data-zfs aria-pressed="' + FS + '" title="' + (FS ? "Zpět (Esc), pro všechny" : "Schéma přes celé okno, pro všechny") + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg></button>';
+  return '<button type="button" class="zfs" data-zfs aria-pressed="' + FS + '" title="' + (FS ? "Zpět (Esc)" : "Schéma přes celé okno") + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg></button>';
 }
 function fsApply() {
   var pap = document.querySelector("#main .paper"), on = FS && st.view === "ex";
@@ -1362,13 +1368,12 @@ function fsApply() {
   pap.classList.toggle("fs", on);
   var b = pap.querySelector(".zfs");
   if (b) b.outerHTML = fsBtn();
-  if (on) { pap.setAttribute("popover", "manual"); if (!pap.matches(":popover-open")) pap.showPopover(); }
+  if (on) { pap.setAttribute("popover", "manual"); if (!pap.matches(":popover-open")) { pap.showPopover(); if (RTBAR.matches(":popover-open")) rtBar(); } } /* the room bar stays on top */
   else pap.removeAttribute("popover"); /* removing the attribute also closes it */
 }
-function fsSet(on, mine) {
+function fsSet(on) {
   if (on === FS) return;
   FS = on; fsApply();
-  if (mine && RT) rtSend("fs", { on: on });
 }
 document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-zfs]")) fsSet(!FS, true); });
 /* the button shows while the pointer moves over the picture (or a finger taps it) and hides 1.5 s after it stops or leaves */
@@ -1390,7 +1395,7 @@ document.addEventListener("keydown", function (e) { if (e.key === "Escape" && FS
    (pointer capture), so it does not count. */
 function fsOut(e) {
   var pap = FS && st.view === "ex" && document.querySelector("#main .paper.fs");
-  return !!pap && !pap.contains(e.target);
+  return !!pap && !pap.contains(e.target) && !(e.target.closest && e.target.closest("#rtbar"));
 }
 ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick", "auxclick", "contextmenu"].forEach(function (t) {
   window.addEventListener(t, function (e) {
@@ -1498,7 +1503,7 @@ function rtUi() {
   b.innerHTML = "<h2>Místnost <code>" + RT.code + "</code></h2><p>" + (n ? "Připojeno: " + (n + 1) + " (vy + " + n + ")" + (c.r ? ", z toho " + c.r + " přes veřejné relaye, protože síť nepovolila přímé spojení (ukazatel je trhanější)." : ".") : "Čekám na ostatní… pošli jim odkaz nebo kód.") + "</p>" +
     '<div class="rtrow"><input id="rtlink" readonly aria-label="Odkaz do místnosti" value="' + url.href.replace(/"/g, "&quot;") + '"><button class="btn" type="button" data-rt="copy">Kopírovat</button></div>' +
     '<label><input type="checkbox" id="rtfollow"' + (RT.follow ? " checked" : "") + "> sledovat ostatní (přejdu tam, kam oni)</label>" +
-    "<ul class=\"rthelp\"><li><b>Ukazatel</b>: najeď myší na schéma</li><li><b>Poznámka</b>: dvojklik na schéma, klik ji smaže</li><li><b>Kreslení</b>: pravý horní roh schématu</li><li><b>Ukázat ostatním</b>: pravý klik na vzorec (v listu, v krocích i na stránkách), zadanou hodnotu, řádek výsledků ve zkoušce, blok, vzor nebo štítek u schématu. Vzory, tahák a Bloky si jinak každý prochází sám.</li><li><b>Otevřít všem</b>: pravý klik na příklad v seznamu (i těm, kdo nesledují)</li><li><b>Poznámky ✎</b> u pravého okraje se otevřou všem</li></ul>" +
+    "<ul class=\"rthelp\"><li><b>Ukazatel</b>: najeď myší na schéma</li><li><b>Poznámka</b>: dvojklik na schéma, klik ji smaže</li><li><b>Kreslení</b>: pravý horní roh schématu</li><li><b>Ukázat ostatním</b>: pravý klik na vzorec (v listu, v krocích i na stránkách), zadanou hodnotu, řádek výsledků ve zkoušce, blok, vzor nebo štítek u schématu. Vzory, tahák a Bloky si jinak každý prochází sám.</li><li><b>Otevřít všem</b>: pravý klik na příklad v seznamu (i těm, kdo nesledují)</li><li><b>Podívat se sám</b>: oko pod číslem příkladu v seznamu; ostatní zůstanou, kde jsou, a nahoře máš tlačítko zpět k nim</li><li>Když zrovna píšeš, kreslíš nebo máš schéma přes celé okno, nepřeskočí tě to hned: přechod počká nahoře, dokud nic neděláš</li><li><b>Poznámky ✎</b> u pravého okraje se otevřou všem</li></ul>" +
     '<button class="btn" type="button" data-rt="leave">Opustit místnost</button><p class="msg" id="rtmsg" role="status"></p>';
 }
 function viewNow() {
@@ -1511,7 +1516,7 @@ function viewNow() {
 function rtAfterRender() {
   if (!RT) return;
   var v = viewNow(), k = JSON.stringify(v);
-  if (k !== RT.lastKey) { RT.lastKey = k; if (!RT.applying) rtSend("view", v); }
+  if (k !== RT.lastKey) { RT.lastKey = k; if (!RT.applying && !RT.peek) { rtSend("view", v); RT.roomV = v; } }
   drawShared(); zkCarets();
 }
 function applyView(d) {
@@ -1541,6 +1546,88 @@ function applyView(d) {
     render();
     if (changed && !onPage) { window.scrollTo(0, 0); scrollListToCurrent(); }
   } finally { RT.applying = false; }
+}
+/* ---------- looking on your own, and not being pulled away while busy ----------
+   Peek (the eye under a problem number in the list, only in a room): you browse alone. Your view isn't sent, the room's
+   doesn't move you, and a bar shows where the others are with a button back to them. Right-clicking a problem still
+   opens it for everyone (and ends your peek).
+   Busy (typing in a field, the notes, the schematic over the window, or a click in the last 15 s): the room's move
+   waits in the bar and happens once you are idle, or when you click it. The first view after joining is never held. */
+var BUSY_MS = 15000, lastAct = 0, EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+["pointerdown", "keydown"].forEach(function (t) {
+  document.addEventListener(t, function (e) { if (!(e.target.closest && e.target.closest("#rtbar"))) lastAct = Date.now(); }, true);
+});
+/* why you count as busy right now ("" = you don't), so the bar can say what the move waits for */
+function busyWhy() {
+  var a = document.activeElement;
+  if (FS) return "fs";
+  if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && /^(text|search)$/.test(a.type)))) return "field";
+  return Date.now() - lastAct < BUSY_MS ? "recent" : "";
+}
+function busy() { return !!busyWhy(); }
+var WAITS = { fs: "Přesunu tě, až zavřeš schéma přes celé okno.", field: "Přesunu tě chvíli poté, co dopíšeš.", recent: "Přesunu tě, až chvíli nic neuděláš." };
+var RTBAR = document.createElement("div");
+RTBAR.id = "rtbar"; RTBAR.className = "rtbar"; RTBAR.setAttribute("role", "status");
+if (FS_OK) RTBAR.setAttribute("popover", "manual"); else RTBAR.hidden = true;
+document.body.appendChild(RTBAR);
+function viewLabel(v) {
+  var p = v && PROBS.find(function (x) { return x.id === v.id; });
+  if (!p) return "";
+  var md = { learn: "Pochopit", practice: "Procvičit", exam: "Zkouška" }[v.mode];
+  return "<b>" + esc(p.id) + "</b>" + (md ? " · " + md : "");
+}
+function rtBar() {
+  var h = "";
+  if (RT && RT.peek) h = '<span class="eye">' + EYE + "</span><span>Díváš se sám" + (RT.roomV ? ", ostatní jsou na " + viewLabel(RT.roomV) : "") + '</span><button class="btn primary" type="button" data-rtback="1">Zpět k ostatním</button>';
+  else if (RT && RT.pend) h = "<span>Ostatní jsou na " + viewLabel(RT.pend.v) + '</span><button class="btn primary" type="button" data-rtback="1">Přejít</button><span class="later">' + (WAITS[busyWhy()] || WAITS.recent) + "</span>";
+  if (!h) { if (!FS_OK) RTBAR.hidden = true; else if (RTBAR.matches(":popover-open")) RTBAR.hidePopover(); return; }
+  RTBAR.innerHTML = h;
+  if (!FS_OK) { RTBAR.hidden = false; return; }
+  if (RTBAR.matches(":popover-open")) RTBAR.hidePopover();
+  RTBAR.showPopover(); /* shown again so it sits above a schematic that is over the window */
+}
+/* what I tell a newcomer is the room's place, not where I'm peeking */
+function myView() { return RT.peek ? RT.roomV : viewNow(); }
+function roomView(d) {
+  if (!d || typeof d !== "object" || typeof d.id !== "string") return;
+  RT.roomV = d;
+  if (RT.peek) { rtBar(); return; }
+  if (!RT.follow) return;
+  if (!RT.need && busy()) { RT.pend = { v: d }; rtBar(); return; }
+  RT.pend = null; applyView(d); rtBar();
+}
+/* "open for everyone" (right-click in the list): also for those who don't follow, but it waits like a move */
+function roomGoto(id) {
+  if (!PROBS.some(function (p) { return p.id === id; })) return;
+  RT.roomV = { v: "ex", id: id };
+  if (RT.peek) { rtBar(); return; }
+  if (busy()) { RT.pend = { v: RT.roomV }; rtBar(); return; }
+  RT.pend = null; rtGoto(id); rtBar();
+}
+function pendGo() {
+  var p = RT && RT.pend;
+  if (!p) return;
+  RT.pend = null;
+  if (RT.follow) applyView(p.v); else rtGoto(p.v.id);
+  rtBar();
+}
+setInterval(function () {
+  if (!RT || !RT.pend || RT.peek) return;
+  if (!busy()) { pendGo(); return; }
+  var l = RTBAR.querySelector(".later"), w = WAITS[busyWhy()];
+  if (l && w && l.textContent !== w) l.textContent = w; /* e.g. the schematic closed: now it waits for a quiet moment */
+}, 1000);
+function peekStart(i) {
+  if (!RT) { go(i); return; }
+  if (!RT.peek) { RT.peek = true; RT.pend = null; if (!RT.roomV) RT.roomV = viewNow(); }
+  go(i); rtBar();
+}
+function peekEnd() {
+  if (!RT || !RT.peek) return;
+  RT.peek = false; RT.pend = null;
+  if (RT.follow && RT.roomV) applyView(RT.roomV);
+  RT.lastKey = JSON.stringify(viewNow()); /* not following: stay, but don't send the problem you peeked at */
+  renderSide(); rtBar();
 }
 /* everything below arrives from other people's browsers: validate before use */
 function pct(v) { return typeof v === "number" && v >= 0 && v <= 100 ? v : null; }
@@ -1612,9 +1699,9 @@ function rtRecv(msg, pid) {
   if (isNew) rtSend("hi", { need: RT.need, since: RT.since, pins: pinList(), ink: inkList(), pad: padState(), zoom: ZOOM, zk: zkR() }, msg.f);
   /* a newcomer asks for the current view once; whoever has been in the room longer answers, never the newcomer */
   if (msg.t === "hi" && d && typeof d === "object") { if (isFinite(d.since) && d.since > 0) m.since = +d.since; /* for peerCol */ if (d.zoom && typeof d.zoom === "object") Object.keys(d.zoom).slice(0, 200).forEach(function (id) { var w = d.zoom[id]; if (w) zMerge({ id: id, z: w.z, x: w.x, y: w.y }); }); mergePins(d.pins); mergeInk(d.ink); if (d.pad) padRecv("padhi", d.pad);
-    if (d.zk && typeof d.zk === "object") Object.keys(d.zk).slice(0, 200).forEach(function (id) { var v = d.zk[id]; if (typeof v === "string" && !zkR()[id] && PROBS.some(function (p) { return p.id === id; })) { zkR()[id] = v.slice(0, 4000); zkShow(id, null); } }); if (d.need === true && (!RT.need || RT.since < d.since)) rtSend("view", viewNow(), msg.f); drawShared(); }
-  if (msg.t === "view") applyView(d);
-  if (msg.t === "goto" && d && typeof d.id === "string") rtGoto(d.id);
+    if (d.zk && typeof d.zk === "object") Object.keys(d.zk).slice(0, 200).forEach(function (id) { var v = d.zk[id]; if (typeof v === "string" && !zkR()[id] && PROBS.some(function (p) { return p.id === id; })) { zkR()[id] = v.slice(0, 4000); zkShow(id, null); } }); if (d.need === true && (!RT.need || RT.since < d.since)) myView() && rtSend("view", myView(), msg.f); drawShared(); }
+  if (msg.t === "view") roomView(d);
+  if (msg.t === "goto" && d && typeof d.id === "string") roomGoto(d.id);
   if (msg.t === "ptr" && d && typeof d.id === "string") {
     var x = pct(d.x), y = pct(d.y);
     if (x == null || y == null) delete RT.cur[msg.f]; else RT.cur[msg.f] = { id: d.id, x: x, y: y, at: Date.now() };
@@ -1629,7 +1716,6 @@ function rtRecv(msg, pid) {
   if (msg.t === "fshow" && d && Number.isInteger(d.i) && d.i >= -1 && d.i < 500) showFormula(d.i);
   if (msg.t === "erase" && typeof d === "string" && INK[d]) { delete INK[d]; drawShared(); }
   if (msg.t === "zoom") zMerge(d);
-  if (msg.t === "fs" && d && typeof d.on === "boolean") fsSet(d.on);
   if (msg.t === "zkop" || msg.t === "zkt" || msg.t === "zkc" || msg.t === "zkchk") zkRecv(msg.t, d, msg.f);
   if (msg.t === "hl" && d && typeof d.pg === "string" && /^(ex:[\w.\-]{1,16}|vzory|bloky|tahak)$/.test(d.pg) && (d.k === null || (typeof d.k === "string" && /^[\w.\-]{1,40}$/.test(d.k)))) showHl(d);
   if (JSON.stringify(rtCount()) !== before) rtUi();
@@ -1719,7 +1805,7 @@ function rtJoin(code, creator) {
     /* your pen starts in your room colour (the one others see for your pointer and pins) */
     st.inkC = PADC = RT.myCol = peerCol(RT.me); padTools();
     var sw = document.querySelector('#main [data-ink="color"] i'); if (sw) sw.style.background = st.inkC;
-    rtUi(); drawShared();
+    rtUi(); drawShared(); renderSide(); /* the eyes in the list */
     if (st.view === "ex" && curMode(PROBS[st.pi]) === "exam") render(); /* the box shows the room's shared text */
   }).catch(function () { rtMsg("Spojení se nepodařilo spustit (jste online?)."); });
 }
@@ -1730,7 +1816,7 @@ function rtLeave() {
   if (R) setTimeout(function () { relaySocks(R).forEach(function (so) { try { so.send(JSON.stringify(["CLOSE", R.sub])); } catch (x) {} }); }, 1000);
   RT.timers.forEach(function (t) { clearTimeout(t); clearInterval(t); });
   RT.room.leave(); RT = null; showFormula(-1); BON = null; markBlock(); HON = null; markHl();
-  setUrlRoom(null); drawShared(); rtUi();
+  setUrlRoom(null); drawShared(); rtUi(); renderSide(); rtBar();
   if (st.view === "ex" && curMode(PROBS[st.pi]) === "exam") render(); /* your own text back in the box */
 }
 var ptrAt = 0, ptrIn = false;

@@ -46,6 +46,8 @@ sub { font-size: .72em; line-height: 0; }
 .brand span { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; }
 .iconbtn { border: 1px solid var(--rule); background: var(--paper); width: 32px; height: 32px; cursor: pointer; font-size: 17px; line-height: 1; flex: none; }
 .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+.brandlink { display: block; min-width: 0; color: inherit; text-decoration: none; }
+.brandlink:hover b, .brandlink:focus-visible b { color: var(--accent); }
 .search { padding: 8px 10px; border-bottom: 1px solid var(--rule); }
 .search input { width: 100%; padding: 6px 9px; border: 1px solid var(--rule); background: var(--paper); font-size: 14px; }
 .search input:focus { border-color: var(--accent); }
@@ -61,6 +63,12 @@ sub { font-size: .72em; line-height: 0; }
 .list .n { font-family: var(--font-display); font-weight: 700; font-size: 20px; line-height: 1; color: var(--accent); }
 .list .t { font-size: 13.5px; line-height: 1.3; }
 .list li.chtile { display: none; } /* chapter tiles exist only in the mobile strip */
+/* in a room: the eye (look on your own) under the problem number, the theme button's style scaled down */
+.list li.pk { position: relative; }
+.list li.pk > button[data-pi] { min-height: 62px; }
+.list .peek { position: absolute; left: 12px; top: 33px; width: 22px; height: 22px; min-width: 0; padding: 0; display: grid; place-items: center; border: 1px solid var(--rule); background: var(--paper); color: var(--muted); }
+.list .peek svg { width: 13px; height: 13px; }
+.list .peek:hover, .list li.peeking .peek { border-color: var(--accent); color: var(--accent); }
 .list .k { grid-column: 2; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 .pins { display: inline-flex; gap: 3px; }
 .pins i { width: 7px; height: 7px; border: 1.5px solid var(--muted); display: block; }
@@ -372,6 +380,14 @@ main { padding-bottom: 56px; }
 .rtchip { position: fixed; z-index: 30; right: calc(env(safe-area-inset-right, 0px) + 16px); bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 999px; background: var(--sheet); color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
 .rtchip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #2e9e5b; }
 .rtchip[hidden] { display: none; }
+/* room bar: peeking on your own, or a move by the others that waits while you are busy */
+.rtbar { position: fixed; inset: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 50%; transform: translateX(-50%); margin: 0; z-index: 45; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; max-width: calc(100vw - 24px); padding: 6px 8px 6px 14px; border: 1px solid var(--accent); border-radius: 999px; background: var(--sheet); color: var(--ink); font: 14px/1.3 var(--font-body); box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+.rtbar:popover-open, .rtbar:not([popover]) { display: flex; } /* a closed popover stays hidden (the browser's rule) */
+.rtbar[hidden] { display: none; }
+.rtbar .btn { padding: 4px 12px; }
+.rtbar .later { color: var(--muted); font-size: 12px; }
+.rtbar .eye { display: inline-grid; color: var(--accent); }
+.rtbar .eye svg { width: 16px; height: 16px; }
 @media print { .rtchip { display: none; } }
 
 /* ---------- drawing on the schematic ---------- */
